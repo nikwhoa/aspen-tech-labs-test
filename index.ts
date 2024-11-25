@@ -1,4 +1,9 @@
 import { JSDOM } from "jsdom";
+import dotenv from "dotenv";
+import { google } from "googleapis";
+import { GoogleAuth } from "google-auth-library";
+
+dotenv.config();
 
 class Category {
   name: string = "";
@@ -29,6 +34,37 @@ class Category {
   }
 }
 
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const RANGE = "Sheet1!A1";
+
+async function postToGoogleSheets(
+  data: { name: string; url: string; employees: number }[]
+) {
+  try {
+    const auth = new GoogleAuth({
+      keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+
+    const sheets = google.sheets({ version: "v4", auth });
+
+    const values = data.map((item) => [item.name, item.url, item.employees]);
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: RANGE,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [["Name", "URL", "Employees"], ...values],
+      },
+    });
+
+    console.log("Data successfully posted to Google Sheets");
+  } catch (error) {
+    console.error("Error posting to Google Sheets:", error);
+  }
+}
+
 const url: string = "https://formacion.infojobs.net/";
 const selector: string = "div.home-search-results-items > a";
 
@@ -56,7 +92,9 @@ const createObjet = JSDOM.fromURL(url)
     return [];
   });
 
-createObjet
+/* Getting number of employees from each category */
+
+const getEmployees = createObjet
   .then((el) => {
     return Promise.all(
       el.map((el) => {
@@ -78,5 +116,5 @@ createObjet
     return Category.calculateTopCategory(el);
   })
   .then((el) => {
-    console.log(el);
+    postToGoogleSheets(el);
   });
